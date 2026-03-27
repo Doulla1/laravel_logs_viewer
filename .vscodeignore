@@ -1,0 +1,9 @@
+.vscode/**
+.vscode-test/**
+src/**
+test/**
+scripts/**
+docs/**
+eslint.config.cjs
+tsconfig.json
+node_modules/**/.cache/**

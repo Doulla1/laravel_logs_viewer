@@ -1,0 +1,70 @@
+{
+  "name": "laravel-logs-viewer",
+  "displayName": "Laravel Logs Viewer",
+  "description": "Display and analyze Laravel logs directly in VS Code.",
+  "version": "0.1.0",
+  "publisher": "adiallo",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:laravelLogs.openViewer"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "laravelLogs.openViewer",
+        "title": "Laravel Logs: Open Viewer"
+      }
+    ],
+    "configuration": {
+      "title": "Laravel Logs Viewer",
+      "properties": {
+        "laravelLogs.defaultGlob": {
+          "type": "string",
+          "default": "storage/logs/laravel*.log",
+          "description": "Default glob pattern used to find Laravel log files."
+        },
+        "laravelLogs.searchDebounceMs": {
+          "type": "number",
+          "default": 180,
+          "minimum": 100,
+          "maximum": 500,
+          "description": "Debounce duration in milliseconds for instant search."
+        },
+        "laravelLogs.largeFileWarningMb": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Warn when the total size of matched log files exceeds this threshold in MB."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint . --ext .ts",
+    "test": "npm run compile && node --test test/*.test.js",
+    "perf": "npm run compile && node scripts/perf.js",
+    "package:vsix": "vsce package --allow-star-activation --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "2.24.0",
+    "@types/node": "^20.17.30",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.30.1",
+    "@typescript-eslint/parser": "^8.30.1",
+    "eslint": "^9.24.0",
+    "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "cheerio": "1.0.0-rc.12"
+  }
+}
