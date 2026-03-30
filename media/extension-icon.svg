@@ -1,0 +1,37 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="40" y1="28" x2="214" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172033"/>
+      <stop offset="1" stop-color="#0E131D"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="56" y1="56" x2="184" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#263246"/>
+      <stop offset="1" stop-color="#1A2331"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="154" y1="149" x2="217" y2="212" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6EE7F9"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <filter id="shadow" x="18" y="16" width="220" height="224" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="11"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0208333 0 0 0 0 0.0352941 0 0 0 0 0.0705882 0 0 0 0.4 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_2"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_2" result="shape"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="40" y="32" width="176" height="176" rx="44" fill="url(#bg)"/>
+    <rect x="58" y="54" width="126" height="114" rx="28" fill="url(#panel)" stroke="rgba(255,255,255,0.08)"/>
+    <circle cx="81" cy="83" r="8" fill="#F87171"/>
+    <circle cx="81" cy="111" r="8" fill="#F59E0B"/>
+    <circle cx="81" cy="139" r="8" fill="#60A5FA"/>
+    <rect x="98" y="76" width="62" height="12" rx="6" fill="#F8FAFC"/>
+    <rect x="98" y="104" width="48" height="12" rx="6" fill="#D7DFEA"/>
+    <rect x="98" y="132" width="68" height="12" rx="6" fill="#C8D5E6"/>
+    <circle cx="172" cy="166" r="30" fill="#101722" stroke="url(#glass)" stroke-width="10"/>
+    <path d="M193 187L214 208" stroke="url(#glass)" stroke-width="12" stroke-linecap="round"/>
+  </g>
+</svg>

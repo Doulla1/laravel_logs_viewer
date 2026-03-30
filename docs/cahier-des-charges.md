@@ -26,7 +26,12 @@ L'interface contient 3 zones:
 - Panneau de détail (droite):
   - Stack trace
   - Contexte JSON
-  - Actions Copy line / Copy JSON
+  - Action de copie inline au survol de chaque bloc de détail
+- Sidebar VS Code:
+  - Action `Open Logs Viewer`
+  - Barre de recherche au-dessus de la liste
+  - Liste live des logs du plus recent au plus ancien
+  - Clic sur une entree pour ouvrir un onglet UI de details
 
 ### 3.2 Recherche, filtres, tri
 - Filtre combiné: texte + niveau + plage de date.
@@ -41,6 +46,7 @@ L'interface contient 3 zones:
 - Réouverture sans friction sur le dernier fichier actif.
 - Import manuel d'un fichier de log hors workspace.
 - Collage direct de logs bruts pour formatage et inspection.
+- Lors du passage a une source importee ou collee, ne pas masquer les entrees avec le preset date workspace par defaut; restaurer le filtre date workspace au retour.
 
 ### 3.4 Gestion multi-fichiers
 - Support de `laravel.log` et `laravel-*.log`.

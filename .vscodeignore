@@ -1,9 +1,16 @@
 .vscode/**
 .vscode-test/**
+.github/**
+.git/**
 src/**
 test/**
 scripts/**
 docs/**
+storage/**
+.codex
+AGENTS.md
+todo.md
+*.vsix
 eslint.config.cjs
 tsconfig.json
 node_modules/**/.cache/**

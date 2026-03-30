@@ -2,20 +2,55 @@
   "name": "laravel-logs-viewer",
   "displayName": "Laravel Logs Viewer",
   "description": "Display and analyze Laravel logs directly in VS Code.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "publisher": "adiallo",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
+  "icon": "media/extension-icon.png",
+  "galleryBanner": {
+    "color": "#121826",
+    "theme": "dark"
+  },
+  "categories": [
+    "Debuggers",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "laravel",
+    "logs",
+    "php",
+    "debugging",
+    "observability",
+    "monitoring",
+    "webview"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": [
-    "Other"
-  ],
   "activationEvents": [
-    "onCommand:laravelLogs.openViewer"
+    "onCommand:laravelLogs.openViewer",
+    "onView:laravelLogsSidebar"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "laravelLogs",
+          "title": "Laravel Logs",
+          "icon": "media/activity-bar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "laravelLogs": [
+        {
+          "id": "laravelLogsSidebar",
+          "name": "Viewer",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "laravelLogs.openViewer",
@@ -48,10 +83,12 @@
     }
   },
   "scripts": {
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint . --ext .ts",
     "test": "npm run compile && node --test test/*.test.js",
+    "validate": "npm run lint && npm test",
     "perf": "npm run compile && node scripts/perf.js",
     "package:vsix": "vsce package --allow-star-activation --allow-missing-repository"
   },

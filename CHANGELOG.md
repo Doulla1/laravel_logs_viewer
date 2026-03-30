@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.1.0
-- Initialisation du projet extension VS Code.
-- Ajout d'une première vue webview 3 zones.
-- Ajout d'un socle domain/application/infrastructure/presentation.
-- Ajout du chargement streaming multi-fichiers et du refresh incrementiel append-only.
-- Ajout du mode tail, des vues sauvegardees et d'un index leger.
-- Ajout des tests unitaires/integration, du benchmark et du packaging VSIX.
+## 1.0.0
+- First stable release of Laravel Logs Viewer.
+- Added the main 3-pane log viewer webview with fast filtering and detail inspection.
+- Added streaming multi-file loading and append-only incremental refresh.
+- Added workspace logs, imported file support, and pasted log support.
+- Added live tail mode, source switching, saved views, and lightweight indexing.
+- Added sidebar log browsing and dedicated detail panels.
+- Added tests, CI validation, Marketplace metadata, and release packaging polish.

@@ -1,5 +1,5 @@
-import * as vscode from 'vscode';
 import * as path from 'node:path';
+import * as vscode from 'vscode';
 import { LogTailService } from '../../application/services/log-tail-service';
 import { LogWorkspaceService, type LogWorkspaceSnapshot } from '../../application/services/log-workspace-service';
 import type { LogEntry } from '../../domain/log-entry';
@@ -25,15 +25,17 @@ interface WebviewSource {
   kind: 'workspace' | 'importedFile' | 'pastedLogs';
   label: string;
   canTail: boolean;
+  activationId: number;
 }
 
 interface WebviewMessage {
-  type: 'ready' | 'copyLine' | 'copyJson' | 'refresh' | 'toggleTail' | 'pickImportedFile' | 'switchSource' | 'applyPastedLogs';
+  type: 'ready' | 'copyText' | 'copyJson' | 'refresh' | 'toggleTail' | 'pickImportedFile' | 'switchSource' | 'applyPastedLogs';
   payload?: {
     text?: string;
     json?: unknown;
     enabled?: boolean;
     kind?: 'workspace' | 'importedFile' | 'pastedLogs';
+    copyKind?: 'context' | 'stack' | 'raw';
   };
 }
 
@@ -59,6 +61,7 @@ export class LogViewerPanel {
   private currentSnapshot: LogWorkspaceSnapshot | undefined;
   private currentFilePaths: string[] = [];
   private currentSource: ViewerSource = { kind: 'workspace' };
+  private currentSourceActivationId = 0;
   private tailEnabled = false;
 
   public static createOrShow(extensionContext: vscode.ExtensionContext): void {
@@ -146,15 +149,15 @@ export class LogViewerPanel {
       return;
     }
 
-    if (message.type === 'copyLine' && message.payload?.text) {
+    if (message.type === 'copyText' && message.payload?.text) {
       await vscode.env.clipboard.writeText(message.payload.text);
-      await this.postCopyState('line');
+      await this.postCopyState(message.payload.copyKind ?? 'raw');
       return;
     }
 
     if (message.type === 'copyJson' && message.payload?.json !== undefined) {
       await vscode.env.clipboard.writeText(JSON.stringify(message.payload.json, null, 2));
-      await this.postCopyState('json');
+      await this.postCopyState(message.payload.copyKind ?? 'context');
     }
   }
 
@@ -282,6 +285,10 @@ export class LogViewerPanel {
   }
 
   private async setSource(source: ViewerSource): Promise<void> {
+    if (!this.isSameSource(this.currentSource, source)) {
+      this.currentSourceActivationId += 1;
+    }
+
     this.currentSource = source;
     this.currentSnapshot = undefined;
     this.currentFilePaths = [];
@@ -331,7 +338,7 @@ export class LogViewerPanel {
     return configuredMb * 1024 * 1024;
   }
 
-  private async postCopyState(kind: 'line' | 'json'): Promise<void> {
+  private async postCopyState(kind: 'context' | 'stack' | 'raw'): Promise<void> {
     await this.panel.webview.postMessage({
       type: 'copyCompleted',
       payload: {
@@ -345,12 +352,14 @@ export class LogViewerPanel {
   }
 
   private getHtmlForWebview(webview: vscode.Webview): string {
+    const dateTimeScriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'date-time-input.js'));
+    const policyScriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'source-filter-policy.js'));
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'main.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'main.css'));
     const nonce = getNonce();
 
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -363,46 +372,127 @@ export class LogViewerPanel {
   </head>
   <body>
     <div class="app-shell">
-      <header class="toolbar">
-        <div class="toolbar-row">
-          <div class="toolbar-left">
-            <input id="searchInput" type="search" placeholder="Search in logs..." />
-            <input id="startDateInput" type="datetime-local" />
-            <input id="endDateInput" type="datetime-local" />
+      <header class="app-header">
+        <div class="app-header-main">
+          <div class="title-block">
+            <span class="eyebrow">Laravel Logs</span>
+            <h1 class="app-title">Inspect and tail your logs in a cleaner workspace.</h1>
+            <p class="app-subtitle">
+              Filter fast, switch sources and inspect the selected entry without leaving the panel.
+            </p>
           </div>
-          <div class="toolbar-right">
-            <button id="refreshButton" class="chip">Refresh</button>
-            <button id="tailButton" class="chip">Tail: OFF</button>
-            <button id="sortButton" class="chip active" data-direction="desc">Sort: DESC</button>
-            <span id="statusBadge" class="status">indexing...</span>
-            <span id="resultCount" class="count">0 results</span>
-          </div>
-        </div>
-        <div class="toolbar-row toolbar-secondary">
-          <div class="source-block">
-            <span class="section-label">Source</span>
-            <div class="chips">
-              <button id="workspaceSourceButton" class="chip active">Workspace</button>
-              <button id="importFileButton" class="chip">Import file</button>
-              <button id="pasteSourceButton" class="chip">Paste logs</button>
+          <div class="header-actions">
+            <div class="summary-cluster">
+              <div class="summary-pill">
+                <span class="summary-label">Status</span>
+                <span id="statusBadge" class="status">indexing...</span>
+              </div>
+              <div class="summary-pill">
+                <span class="summary-label">Results</span>
+                <span id="resultCount" class="count">0 results</span>
+              </div>
             </div>
-          </div>
-          <div class="chips" id="levelChips">
-            <button class="chip active" data-level="ERROR">ERROR</button>
-            <button class="chip active" data-level="WARNING">WARNING</button>
-            <button class="chip active" data-level="INFO">INFO</button>
-          </div>
-          <div class="chips" id="datePresets">
-            <button class="chip" data-preset="15m">15 min</button>
-            <button class="chip" data-preset="1h">1h</button>
-            <button class="chip active" data-preset="24h">24h</button>
-            <button class="chip" data-preset="custom">Custom</button>
+            <label class="theme-switch" for="themeToggle">
+              <input id="themeToggle" type="checkbox" role="switch" aria-label="Toggle light theme" />
+              <span class="theme-switch-track" aria-hidden="true">
+                <span class="theme-switch-thumb"></span>
+              </span>
+              <span class="theme-switch-text">Theme</span>
+              <span id="themeLabel" class="theme-switch-value">Dark</span>
+            </label>
           </div>
         </div>
+
+        <div class="controls-grid">
+          <section class="control-card">
+            <div class="control-card-header">
+              <div>
+                <span class="section-label">Search</span>
+                <h2 class="card-title">Search</h2>
+              </div>
+            </div>
+            <div class="search-stack">
+              <input id="searchInput" type="search" placeholder="Search message, stack trace or raw log..." />
+              <div class="date-row">
+                <label class="date-field" for="startDateInput">
+                  <span class="section-label">From</span>
+                  <div class="date-field-controls">
+                    <input id="startDateInput" type="date" lang="fr-FR" />
+                    <input id="startTimeInput" type="time" lang="fr-FR" step="60" />
+                  </div>
+                </label>
+                <label class="date-field" for="endDateInput">
+                  <span class="section-label">To</span>
+                  <div class="date-field-controls">
+                    <input id="endDateInput" type="date" lang="fr-FR" />
+                    <input id="endTimeInput" type="time" lang="fr-FR" step="60" />
+                  </div>
+                </label>
+              </div>
+              <div class="advanced-controls-shell">
+                <button
+                  type="button"
+                  id="advancedControlsToggle"
+                  class="collapse-toggle"
+                  aria-expanded="false"
+                  aria-controls="advancedControlsPanel"
+                >
+                  Show levels, range, sources and actions
+                </button>
+                <div id="advancedControlsPanel" class="advanced-controls hidden">
+                  <div class="advanced-controls-grid">
+                    <div class="control-group">
+                      <span class="section-label">Levels</span>
+                      <div class="chips" id="levelChips">
+                        <button type="button" class="chip active" data-level="ERROR">ERROR</button>
+                        <button type="button" class="chip active" data-level="WARNING">WARNING</button>
+                        <button type="button" class="chip active" data-level="INFO">INFO</button>
+                      </div>
+                    </div>
+                    <div class="control-group">
+                      <span class="section-label">Range</span>
+                      <div class="chips" id="datePresets">
+                        <button type="button" class="chip" data-preset="15m">15 min</button>
+                        <button type="button" class="chip" data-preset="1h">1h</button>
+                        <button type="button" class="chip active" data-preset="24h">24h</button>
+                        <button type="button" class="chip" data-preset="custom">Custom</button>
+                      </div>
+                    </div>
+                    <div class="control-group">
+                      <span class="section-label">Sources</span>
+                      <div class="chips">
+                        <button type="button" id="workspaceSourceButton" class="chip active">Workspace</button>
+                        <button type="button" id="importFileButton" class="chip">Import file</button>
+                        <button type="button" id="pasteSourceButton" class="chip">Paste logs</button>
+                      </div>
+                    </div>
+                    <div class="control-group">
+                      <span class="section-label">Actions</span>
+                      <div class="chips action-chips">
+                        <button type="button" id="refreshButton" class="chip">Refresh</button>
+                        <button type="button" id="tailButton" class="chip" title="Follow new lines appended to the current file">Tail: OFF</button>
+                        <button type="button" id="sortButton" class="chip active" data-direction="desc">Sort: DESC</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="toolbar-meta">
+                    <span id="sourceSummary" class="meta-pill">Workspace logs</span>
+                    <span id="fileSummary" class="meta-pill">No files loaded</span>
+                    <span id="sizeSummary" class="meta-pill">0 MB</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
         <section id="pastePanel" class="paste-panel hidden">
           <div class="paste-panel-header">
-            <span class="section-label">Paste logs</span>
-            <span class="status">Paste raw Laravel or JSON logs, then format and load them.</span>
+            <div>
+              <span class="section-label">Paste logs</span>
+              <h2 class="card-title">Load pasted Laravel or JSON log lines</h2>
+            </div>
+            <span class="status">Paste raw logs, then format and inspect them in the viewer.</span>
           </div>
           <textarea
             id="pasteInput"
@@ -411,19 +501,21 @@ export class LogViewerPanel {
             placeholder="Paste Laravel logs or JSON log lines here..."
           ></textarea>
           <div class="paste-actions">
-            <button id="loadPastedLogsButton" class="chip active">Format &amp; Load</button>
-            <button id="clearPastedLogsButton" class="chip">Clear</button>
+            <button type="button" id="loadPastedLogsButton" class="chip active">Format &amp; Load</button>
+            <button type="button" id="clearPastedLogsButton" class="chip">Clear</button>
           </div>
         </section>
-        <div class="toolbar-meta">
-          <span id="sourceSummary" class="status">Workspace logs</span>
-          <span id="fileSummary" class="status">No files loaded</span>
-          <span id="sizeSummary" class="status">0 MB</span>
-        </div>
       </header>
 
       <main class="layout">
-        <section class="log-list">
+        <section class="log-list panel-surface">
+          <div class="panel-heading">
+            <div>
+              <span class="section-label">Entries</span>
+              <h2 class="panel-title">Virtualized log stream</h2>
+            </div>
+            <span class="meta-pill">Large volumes stay smooth</span>
+          </div>
           <div id="emptyState" class="empty-state hidden">No match for current filters.</div>
           <div id="listViewport" class="viewport">
             <div id="listSpacer" class="list-spacer">
@@ -431,28 +523,64 @@ export class LogViewerPanel {
             </div>
           </div>
         </section>
-        <aside class="detail-panel">
-          <h2>Log Details</h2>
-          <div class="detail-actions">
-            <button id="copyLineButton">Copy line</button>
-            <button id="copyJsonButton">Copy JSON</button>
+        <aside class="detail-panel panel-surface">
+          <div class="panel-heading">
+            <div>
+              <span class="section-label">Details</span>
+              <h2 class="panel-title">Selected log entry</h2>
+            </div>
           </div>
           <div id="detailMeta" class="detail-meta">Select a log entry to inspect details.</div>
           <section class="detail-section">
-            <h3>Context JSON</h3>
-            <pre id="contextContent" class="detail-content">-</pre>
+            <div class="detail-card">
+              <button
+                id="copyContextButton"
+                class="detail-copy-button"
+                type="button"
+                aria-label="Copy context JSON"
+                title="Copy context JSON"
+              >
+                <span class="copy-icon" aria-hidden="true"></span>
+              </button>
+              <h3>Context JSON</h3>
+              <pre id="contextContent" class="detail-content">-</pre>
+            </div>
           </section>
           <section class="detail-section">
-            <h3>Stack Trace</h3>
-            <pre id="stackTraceContent" class="detail-content">-</pre>
+            <div class="detail-card">
+              <button
+                id="copyStackButton"
+                class="detail-copy-button"
+                type="button"
+                aria-label="Copy stack trace"
+                title="Copy stack trace"
+              >
+                <span class="copy-icon" aria-hidden="true"></span>
+              </button>
+              <h3>Stack Trace</h3>
+              <pre id="stackTraceContent" class="detail-content">-</pre>
+            </div>
           </section>
           <section class="detail-section">
-            <h3>Raw</h3>
-            <pre id="detailContent" class="detail-content">-</pre>
+            <div class="detail-card">
+              <button
+                id="copyRawButton"
+                class="detail-copy-button"
+                type="button"
+                aria-label="Copy raw log"
+                title="Copy raw log"
+              >
+                <span class="copy-icon" aria-hidden="true"></span>
+              </button>
+              <h3>Raw</h3>
+              <pre id="detailContent" class="detail-content">-</pre>
+            </div>
           </section>
         </aside>
       </main>
     </div>
+    <script nonce="${nonce}" src="${dateTimeScriptUri}"></script>
+    <script nonce="${nonce}" src="${policyScriptUri}"></script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
   </body>
 </html>`;
@@ -481,7 +609,8 @@ export class LogViewerPanel {
       return {
         kind: source.kind,
         label: `Imported: ${path.basename(source.filePath)}`,
-        canTail: true
+        canTail: true,
+        activationId: this.currentSourceActivationId
       };
     }
 
@@ -489,15 +618,21 @@ export class LogViewerPanel {
       return {
         kind: source.kind,
         label: 'Pasted logs',
-        canTail: false
+        canTail: false,
+        activationId: this.currentSourceActivationId
       };
     }
 
     return {
       kind: 'workspace',
       label: 'Workspace logs',
-      canTail: true
+      canTail: true,
+      activationId: this.currentSourceActivationId
     };
+  }
+
+  private isSameSource(left: ViewerSource, right: ViewerSource): boolean {
+    return left.kind === right.kind && left.filePath === right.filePath && left.text === right.text;
   }
 }
 

@@ -1,0 +1,248 @@
+:root {
+  --bg: #0f1113;
+  --panel: #161a1d;
+  --panel-soft: #1c2125;
+  --panel-strong: #20262b;
+  --text: #f4f7f5;
+  --muted: #99a39d;
+  --muted-strong: #c7d0ca;
+  --accent: #57c084;
+  --accent-soft: rgba(87, 192, 132, 0.12);
+  --border: rgba(255, 255, 255, 0.08);
+  --error: #ff8d8d;
+  --warning: #d7c37b;
+  --info: #7bd49e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.app-shell {
+  min-height: 100vh;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hero,
+.detail-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+}
+
+.hero {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hero h1,
+.detail-card h2,
+.meta-card,
+pre {
+  margin: 0;
+}
+
+.hero h1 {
+  max-width: none;
+  font-size: clamp(20px, 2.4vw, 30px);
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--panel-soft);
+}
+
+.level-badge.level-error,
+.level-badge.level-critical {
+  color: var(--error);
+  border-color: rgba(255, 141, 141, 0.24);
+  background: rgba(255, 141, 141, 0.08);
+}
+
+.level-badge.level-warning {
+  color: var(--warning);
+  border-color: rgba(215, 195, 123, 0.24);
+  background: rgba(215, 195, 123, 0.08);
+}
+
+.level-badge.level-info,
+.level-badge.level-debug,
+.level-badge.level-notice {
+  color: var(--info);
+  border-color: rgba(123, 212, 158, 0.22);
+  background: rgba(123, 212, 158, 0.08);
+}
+
+.hero-time,
+.meta-label {
+  color: var(--muted);
+}
+
+.hero-time {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero::after {
+  content: "";
+  display: block;
+  width: 64px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.meta-card {
+  padding: 14px 15px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.meta-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.meta-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: var(--muted-strong);
+  line-height: 1.45;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.detail-card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 280px;
+}
+
+.detail-card-accent {
+  grid-column: 1 / -1;
+  background: var(--panel-strong);
+}
+
+.detail-card h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow: auto;
+  font-family: "IBM Plex Mono", "Cascadia Code", "Menlo", monospace;
+  line-height: 1.72;
+  font-size: 12px;
+  color: #edf2ee;
+  flex: 1;
+  padding: 14px;
+  border-radius: 14px;
+  background: #111518;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.detail-card-accent pre {
+  background: #0d1012;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 14px;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    padding: 18px;
+  }
+
+  .hero h1 {
+    max-width: none;
+    font-size: 24px;
+  }
+}

@@ -1,7 +1,9 @@
 const vscode = acquireVsCodeApi();
 
-const ROW_HEIGHT = 52;
+const ROW_HEIGHT = 88;
 const OVERSCAN = 12;
+const dateTimeInput = globalThis.DateTimeInput;
+const sourceFilterPolicy = globalThis.SourceFilterPolicy;
 
 const state = {
   status: 'indexing...',
@@ -16,9 +18,13 @@ const state = {
   currentSource: {
     kind: 'workspace',
     label: 'Workspace logs',
-    canTail: true
+    canTail: true,
+    activationId: 0
   },
+  theme: 'dark',
   pastePanelOpen: false,
+  advancedControlsOpen: false,
+  workspaceDateFilter: null,
   filters: {
     text: '',
     levels: new Set(['ERROR', 'WARNING', 'INFO']),
@@ -31,12 +37,18 @@ const state = {
 const elements = {
   searchInput: document.getElementById('searchInput'),
   startDateInput: document.getElementById('startDateInput'),
+  startTimeInput: document.getElementById('startTimeInput'),
   endDateInput: document.getElementById('endDateInput'),
+  endTimeInput: document.getElementById('endTimeInput'),
   levelChips: document.getElementById('levelChips'),
   datePresets: document.getElementById('datePresets'),
+  advancedControlsToggle: document.getElementById('advancedControlsToggle'),
+  advancedControlsPanel: document.getElementById('advancedControlsPanel'),
   refreshButton: document.getElementById('refreshButton'),
   tailButton: document.getElementById('tailButton'),
   sortButton: document.getElementById('sortButton'),
+  themeToggle: document.getElementById('themeToggle'),
+  themeLabel: document.getElementById('themeLabel'),
   workspaceSourceButton: document.getElementById('workspaceSourceButton'),
   importFileButton: document.getElementById('importFileButton'),
   pasteSourceButton: document.getElementById('pasteSourceButton'),
@@ -57,16 +69,19 @@ const elements = {
   detailContent: document.getElementById('detailContent'),
   contextContent: document.getElementById('contextContent'),
   stackTraceContent: document.getElementById('stackTraceContent'),
-  copyLineButton: document.getElementById('copyLineButton'),
-  copyJsonButton: document.getElementById('copyJsonButton')
+  copyContextButton: document.getElementById('copyContextButton'),
+  copyStackButton: document.getElementById('copyStackButton'),
+  copyRawButton: document.getElementById('copyRawButton')
 };
 
 let scheduleSearch = createSearchScheduler();
 const copyResetTimers = new Map();
 
 function init() {
+  applyTheme(resolveInitialTheme(), false);
   attachEvents();
   applyDatePreset('24h');
+  updateWorkspaceDateFilterMemory();
   applyFilters();
   vscode.postMessage({ type: 'ready' });
 }
@@ -78,15 +93,19 @@ function attachEvents() {
   });
 
   elements.startDateInput.addEventListener('change', () => {
-    state.filters.start = elements.startDateInput.value ? new Date(elements.startDateInput.value) : null;
-    selectDatePreset('custom');
-    applyFilters();
+    applyDateInputValue('start');
+  });
+
+  elements.startTimeInput.addEventListener('change', () => {
+    applyDateInputValue('start');
   });
 
   elements.endDateInput.addEventListener('change', () => {
-    state.filters.end = elements.endDateInput.value ? new Date(elements.endDateInput.value) : null;
-    selectDatePreset('custom');
-    applyFilters();
+    applyDateInputValue('end');
+  });
+
+  elements.endTimeInput.addEventListener('change', () => {
+    applyDateInputValue('end');
   });
 
   elements.levelChips.addEventListener('click', (event) => {
@@ -123,7 +142,12 @@ function attachEvents() {
     }
 
     applyDatePreset(preset);
+    updateWorkspaceDateFilterMemory();
     applyFilters();
+  });
+
+  elements.advancedControlsToggle.addEventListener('click', () => {
+    setAdvancedControlsOpen(!state.advancedControlsOpen);
   });
 
   elements.refreshButton.addEventListener('click', () => {
@@ -183,6 +207,10 @@ function attachEvents() {
     applyFilters();
   });
 
+  elements.themeToggle.addEventListener('change', () => {
+    applyTheme(elements.themeToggle.checked ? 'light' : 'dark');
+  });
+
   elements.listViewport.addEventListener('scroll', () => {
     renderVisibleRows();
   });
@@ -208,22 +236,31 @@ function attachEvents() {
     renderDetails();
   });
 
-  elements.copyLineButton.addEventListener('click', () => {
-    const selected = getSelectedEntry();
-    if (!selected) {
-      return;
-    }
-
-    vscode.postMessage({ type: 'copyLine', payload: { text: selected.raw } });
-  });
-
-  elements.copyJsonButton.addEventListener('click', () => {
+  elements.copyContextButton.addEventListener('click', () => {
     const selected = getSelectedEntry();
     if (!selected?.context) {
       return;
     }
 
-    vscode.postMessage({ type: 'copyJson', payload: { json: selected.context } });
+    vscode.postMessage({ type: 'copyJson', payload: { json: selected.context, copyKind: 'context' } });
+  });
+
+  elements.copyStackButton.addEventListener('click', () => {
+    const selected = getSelectedEntry();
+    if (!selected?.stackTrace) {
+      return;
+    }
+
+    vscode.postMessage({ type: 'copyText', payload: { text: selected.stackTrace, copyKind: 'stack' } });
+  });
+
+  elements.copyRawButton.addEventListener('click', () => {
+    const selected = getSelectedEntry();
+    if (!selected) {
+      return;
+    }
+
+    vscode.postMessage({ type: 'copyText', payload: { text: selected.raw, copyKind: 'raw' } });
   });
 }
 
@@ -239,6 +276,7 @@ function applyDatePreset(preset) {
   selectDatePreset(preset);
 
   if (preset === 'custom') {
+    syncDateInputs();
     return;
   }
 
@@ -338,14 +376,23 @@ function renderVisibleRows() {
     row.className = `log-row${entry.id === state.selectedId ? ' selected' : ''}`;
     row.dataset.id = entry.id;
     row.style.top = `${index * ROW_HEIGHT}px`;
+    row.title = `${entry.channel} - ${entry.sourceFile}:${entry.sourceLine}`;
 
     row.innerHTML = `
-      <span class="timestamp">${new Date(entry.timestamp).toLocaleString()}</span>
-      <span class="level ${entry.level.toLowerCase()}">${entry.level}</span>
-      <span class="message">
-        ${highlightMessage(entry.message)}
+      <div class="row-main">
+        <div class="row-topline">
+          <span class="level ${entry.level.toLowerCase()}">${entry.level}</span>
+          <span class="timestamp">${formatDateTime(entry.timestamp)}</span>
+        </div>
+        <span class="message">${highlightMessage(entry.message)}</span>
         ${renderInlineIds(entry)}
-      </span>
+      </div>
+      <div class="row-side">
+        <span class="row-channel">${escapeHtml(entry.channel)}</span>
+        <span class="row-location" title="${escapeHtml(`${entry.sourceFile}:${entry.sourceLine}`)}">
+          ${escapeHtml(formatLocation(entry.sourceFile, entry.sourceLine))}
+        </span>
+      </div>
     `;
 
     fragment.appendChild(row);
@@ -363,19 +410,21 @@ function renderDetails() {
     elements.detailContent.textContent = '-';
     elements.contextContent.textContent = '-';
     elements.stackTraceContent.textContent = '-';
-    elements.copyLineButton.disabled = true;
-    elements.copyJsonButton.disabled = true;
+    elements.copyContextButton.disabled = true;
+    elements.copyStackButton.disabled = true;
+    elements.copyRawButton.disabled = true;
     return;
   }
 
   elements.detailMeta.textContent =
-    `${entry.level} ${entry.channel} ${new Date(entry.timestamp).toLocaleString()} ` +
+    `${entry.level} ${entry.channel} ${formatDateTime(entry.timestamp)} ` +
     `${entry.sourceFile}:${entry.sourceLine}${renderDetailIds(entry)}`;
   elements.detailContent.textContent = entry.raw;
   elements.contextContent.textContent = entry.context ? JSON.stringify(entry.context, null, 2) : '-';
   elements.stackTraceContent.textContent = entry.stackTrace || '-';
-  elements.copyLineButton.disabled = false;
-  elements.copyJsonButton.disabled = !entry.context;
+  elements.copyContextButton.disabled = !entry.context;
+  elements.copyStackButton.disabled = !entry.stackTrace;
+  elements.copyRawButton.disabled = false;
 }
 
 function updateMeta() {
@@ -385,6 +434,9 @@ function updateMeta() {
   elements.tailButton.disabled = !state.currentSource.canTail;
   elements.tailButton.classList.toggle('active', state.tailEnabled && state.currentSource.canTail);
   elements.tailButton.textContent = state.currentSource.canTail ? `Tail: ${state.tailEnabled ? 'ON' : 'OFF'}` : 'Tail unavailable';
+  elements.tailButton.title = state.currentSource.canTail
+    ? 'Follow new lines appended to the current file'
+    : 'Tail is unavailable for pasted logs';
   elements.sortButton.dataset.direction = state.sortDirection;
   elements.sortButton.textContent = `Sort: ${state.sortDirection.toUpperCase()}`;
   elements.workspaceSourceButton.classList.toggle('active', state.currentSource.kind === 'workspace');
@@ -427,24 +479,64 @@ function renderEmptyMessage() {
   if (state.filteredEntries.length === 0) {
     return state.currentSource.kind === 'pastedLogs'
       ? 'No parsed log entry matches the current filters.'
-      : 'No match for current filters.';
+      : 'No match for current criteria.';
   }
 
   return 'No entries available.';
 }
 
 function syncDateInputs() {
-  elements.startDateInput.value = state.filters.start ? toDateTimeLocalValue(state.filters.start) : '';
-  elements.endDateInput.value = state.filters.end ? toDateTimeLocalValue(state.filters.end) : '';
+  elements.startDateInput.value = state.filters.start ? dateTimeInput.formatDatePart(state.filters.start) : '';
+  elements.startTimeInput.value = state.filters.start ? dateTimeInput.formatTimePart(state.filters.start) : '';
+  elements.endDateInput.value = state.filters.end ? dateTimeInput.formatDatePart(state.filters.end) : '';
+  elements.endTimeInput.value = state.filters.end ? dateTimeInput.formatTimePart(state.filters.end) : '';
+  clearDateInputError(elements.startDateInput);
+  clearDateInputError(elements.startTimeInput);
+  clearDateInputError(elements.endDateInput);
+  clearDateInputError(elements.endTimeInput);
 }
 
-function toDateTimeLocalValue(date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  const hours = `${date.getHours()}`.padStart(2, '0');
-  const minutes = `${date.getMinutes()}`.padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+function applyDateInputValue(target) {
+  const isStart = target === 'start';
+  const dateInput = isStart ? elements.startDateInput : elements.endDateInput;
+  const timeInput = isStart ? elements.startTimeInput : elements.endTimeInput;
+  const fallbackTime = isStart ? '00:00' : '23:59';
+
+  if (!`${dateInput.value ?? ''}`.trim()) {
+    state.filters[target] = null;
+    selectDatePreset('custom');
+    clearDateInputError(dateInput);
+    clearDateInputError(timeInput);
+    updateWorkspaceDateFilterMemory();
+    syncDateInputs();
+    applyFilters();
+    return;
+  }
+
+  const parsed = dateTimeInput.parseDateTimeParts(dateInput.value, timeInput.value, { fallbackTime });
+  if (!parsed) {
+    setDateInputError(dateInput, 'Select a valid date');
+    setDateInputError(timeInput, 'Select a valid time');
+    return;
+  }
+
+  state.filters[target] = parsed;
+  selectDatePreset('custom');
+  clearDateInputError(dateInput);
+  clearDateInputError(timeInput);
+  updateWorkspaceDateFilterMemory();
+  syncDateInputs();
+  applyFilters();
+}
+
+function setDateInputError(input, message) {
+  input.classList.add('input-error');
+  input.title = message;
+}
+
+function clearDateInputError(input) {
+  input.classList.remove('input-error');
+  input.title = '';
 }
 
 function highlightMessage(message) {
@@ -477,7 +569,7 @@ function renderInlineIds(entry) {
     items.push(`<mark class="id">job_id=${escapeHtml(entry.jobId)}</mark>`);
   }
 
-  return items.length > 0 ? ` <span class="row-ids">${items.join(' ')}</span>` : '';
+  return items.length > 0 ? `<span class="row-ids">${items.join(' ')}</span>` : '';
 }
 
 function renderDetailIds(entry) {
@@ -504,13 +596,79 @@ function setPastePanelOpen(open) {
   updateMeta();
 }
 
+function setAdvancedControlsOpen(open) {
+  state.advancedControlsOpen = open;
+  elements.advancedControlsPanel.classList.toggle('hidden', !open);
+  elements.advancedControlsToggle.setAttribute('aria-expanded', String(open));
+  elements.advancedControlsToggle.textContent = open
+    ? 'Hide levels, range, sources and actions'
+    : 'Show levels, range, sources and actions';
+}
+
+function updateWorkspaceDateFilterMemory() {
+  state.workspaceDateFilter = sourceFilterPolicy.rememberWorkspaceDateFilter(
+    state.currentSource,
+    state.filters,
+    state.workspaceDateFilter
+  );
+}
+
+function applySourceTransition(previousSource, nextSource) {
+  const transition = sourceFilterPolicy.applySourceDateFilterTransition(
+    previousSource,
+    nextSource,
+    state.filters,
+    state.workspaceDateFilter
+  );
+
+  state.workspaceDateFilter = transition.workspaceDateFilter;
+
+  if (!transition.changed) {
+    return;
+  }
+
+  state.filters.preset = transition.dateFilter.preset;
+  state.filters.start = transition.dateFilter.start;
+  state.filters.end = transition.dateFilter.end;
+  selectDatePreset(state.filters.preset);
+}
+
+function resolveInitialTheme() {
+  const persistedState = vscode.getState();
+
+  if (persistedState?.theme === 'light' || persistedState?.theme === 'dark') {
+    return persistedState.theme;
+  }
+
+  if (document.body.classList.contains('vscode-light')) {
+    return 'light';
+  }
+
+  return 'dark';
+}
+
+function applyTheme(theme, persist = true) {
+  state.theme = theme === 'light' ? 'light' : 'dark';
+  document.body.dataset.theme = state.theme;
+  elements.themeToggle.checked = state.theme === 'light';
+  elements.themeToggle.setAttribute('aria-checked', String(state.theme === 'light'));
+  elements.themeLabel.textContent = state.theme === 'light' ? 'Light' : 'Dark';
+
+  if (persist) {
+    const persistedState = vscode.getState() ?? {};
+    vscode.setState({
+      ...persistedState,
+      theme: state.theme
+    });
+  }
+}
+
 function flashButton(button, label) {
-  const initialLabel = button.dataset.defaultLabel ?? button.textContent ?? '';
-  const wasActive = button.classList.contains('active') ? 'true' : 'false';
+  const initialLabel = button.dataset.defaultLabel ?? button.getAttribute('aria-label') ?? button.title ?? '';
   button.dataset.defaultLabel = initialLabel;
-  button.dataset.wasActive = wasActive;
-  button.textContent = label;
-  button.classList.add('active');
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  button.classList.add('copied');
 
   const existingTimer = copyResetTimers.get(button.id);
   if (existingTimer) {
@@ -518,10 +676,9 @@ function flashButton(button, label) {
   }
 
   const timer = setTimeout(() => {
-    button.textContent = initialLabel;
-    if (button.dataset.wasActive !== 'true') {
-      button.classList.remove('active');
-    }
+    button.setAttribute('aria-label', initialLabel);
+    button.title = initialLabel;
+    button.classList.remove('copied');
     copyResetTimers.delete(button.id);
   }, 1200);
 
@@ -529,16 +686,31 @@ function flashButton(button, label) {
 }
 
 function showCopyFeedback(kind) {
-  if (kind === 'json') {
-    flashButton(elements.copyJsonButton, 'Copied JSON');
+  if (kind === 'context') {
+    flashButton(elements.copyContextButton, 'Copied context JSON');
     return;
   }
 
-  flashButton(elements.copyLineButton, 'Copied line');
+  if (kind === 'stack') {
+    flashButton(elements.copyStackButton, 'Copied stack trace');
+    return;
+  }
+
+  flashButton(elements.copyRawButton, 'Copied raw log');
 }
 
 function getSelectedEntry() {
   return state.filteredEntries.find((entry) => entry.id === state.selectedId) ?? null;
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString();
+}
+
+function formatLocation(filePath, sourceLine) {
+  const normalizedPath = `${filePath}`.replaceAll('\\', '/');
+  const fileName = normalizedPath.split('/').pop() ?? normalizedPath;
+  return `${fileName}:${sourceLine}`;
 }
 
 function escapeHtml(value) {
@@ -599,7 +771,9 @@ window.addEventListener('message', (event) => {
   state.searchDebounceMs = payload.searchDebounceMs ?? 180;
   state.totalBytes = payload.totalBytes ?? 0;
   state.currentFiles = payload.currentFiles ?? [];
+  const previousSource = state.currentSource;
   state.currentSource = payload.source ?? state.currentSource;
+  applySourceTransition(previousSource, state.currentSource);
   scheduleSearch = createSearchScheduler();
 
   if (state.currentSource.kind === 'pastedLogs') {
@@ -612,6 +786,8 @@ window.addEventListener('message', (event) => {
     syncDateInputs();
   }
 
+  updateWorkspaceDateFilterMemory();
+  setAdvancedControlsOpen(state.advancedControlsOpen);
   updateMeta();
   applyFilters();
 });
