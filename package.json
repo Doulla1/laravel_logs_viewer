@@ -2,7 +2,7 @@
   "name": "laravel-logs-viewer",
   "displayName": "Laravel Logs Viewer",
   "description": "Display and analyze Laravel logs directly in VS Code.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "Doudou",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
